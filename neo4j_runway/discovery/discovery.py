@@ -47,7 +47,7 @@ class Discovery:
             self.user_input = user_input
             if "general_description" not in self.user_input.keys():
                 warnings.warn(
-                    "user_input should include key:value pair {general_description: ...} for best results. "
+                    "user_input should include key:value pair {general_description: ...} for best results."
                     + f"Found keys {self.user_input.keys()}"
                 )
         self.llm = llm
