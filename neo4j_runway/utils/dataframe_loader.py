@@ -59,7 +59,8 @@ class DataFramePackage:
             The DataFramePackage object.
         """
 
-        if not read_file_config: read_file_config = dict()
+        if not read_file_config:
+            read_file_config = dict()
 
         file_type = _get_file_type(file_path)
 

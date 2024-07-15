@@ -74,7 +74,7 @@ class TestDataFramePackageObject(unittest.TestCase):
         )
 
         self.assertTrue(truth.equals(data.dataframe))
-    
+
     def test_generate_dataframe_summaries(self) -> None:
         data = DataFramePackage.from_file(
             file_path="tests/resources/pets-arrows-2.csv",
@@ -88,7 +88,7 @@ class TestDataFramePackageObject(unittest.TestCase):
         self.assertIsInstance(data.df_info, str)
         self.assertIsInstance(data.categorical_data_description, pd.DataFrame)
         self.assertIsInstance(data.numeric_data_description, pd.DataFrame)
-    
+
     def test_load_json_file(self) -> None:
         truth = pd.read_csv(
             "tests/resources/pets-arrows-2.csv", usecols=["name", "pet_name"]
