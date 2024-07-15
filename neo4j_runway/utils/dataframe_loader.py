@@ -1,10 +1,12 @@
 import csv
-from typing import Any, Dict, List, Self, Union
+import io
+import json
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
 
-class DataFrameInput:
+class DataFramePackage:
     """
     A container for a Pandas DataFrame and it's associated information.
     """
@@ -23,57 +25,63 @@ class DataFrameInput:
         self.general_description = general_description
         self.column_descriptions = column_descriptions
 
+        self._generate_dataframe_summaries()
+
     @classmethod
-    def from_csv(
+    def from_file(
         cls,
-        csv_path: str,
+        file_path: str,
         general_description: Union[str, None] = None,
         column_descriptions: Union[Dict[str, str], None] = None,
         name: str = "",
-        read_csv_config: Union[Dict[str, Any], None] = None,
-    ) -> Self:
+        read_file_config: Union[Dict[str, Any], None] = None,
+    ) -> "DataFramePackage":
         """
-        Construct a DataFrameInput object from a csv_path and provided descriptions.
+        Construct a DataFramePackage object from a csv_path and provided descriptions.
 
         Parameters
         ----------
-        csv_path : str
-            The full CSV path.
+        file_path : str
+            The full file path. Either .csv or .json file
         general_description : Union[str, None], optional
-            A general description of the data in the CSV, by default None
+            A general description of the data in the file, by default None
         column_descriptions : Union[Dict[str, str], None], optional
             A dictionary with columns as keys and their associated descriptions as values.
             If this arg is passed, then only the columns identified will be loaded, by default None
         name : str, optional
-            The CSV name. Inferred by the csv_path arg, by default ""
-        read_csv_config : Union[Dict[str, Any], None], optional
-            pd.read_csv() method keyword arguments to pass when loading the CSV file, by default None
+            The file name. Inferred by the file_path arg, by default ""
+        read_file_config : Union[Dict[str, Any], None], optional
+            pd.read_*() method keyword arguments to pass when loading the file, by default None
 
         Returns
         -------
         Self
-            The DataFrameInput object.
+            The DataFramePackage object.
         """
+
+        if not read_file_config: read_file_config = dict()
+
+        file_type = _get_file_type(file_path)
 
         if column_descriptions:
             for k in column_descriptions.keys():
-                if k not in _get_csv_columns(
-                    csv_path,
+                if k not in _get_columns(
+                    file_path,
                     (
-                        read_csv_config["sep"]
-                        if read_csv_config and "sep" in read_csv_config
+                        read_file_config["sep"]
+                        if read_file_config and "sep" in read_file_config
                         else ","
                     ),
                 ):
                     raise ValueError(
                         f"column_descriptions key {k} is not in the DataFrame columns!"
                     )
-            usecols = list(column_descriptions.keys())
-        else:
-            usecols = None
+            read_file_config["usecols"] = list(column_descriptions.keys())
+        # else:
+        #     read_file_config["usecols"] = None
 
-        if "/" in csv_path:
-            pieces = csv_path.split("/")
+        if "/" in file_path:
+            pieces = file_path.split("/")
             if not name:
                 name = pieces.pop()
             else:
@@ -83,14 +91,12 @@ class DataFrameInput:
         else:
             file_loc = ""
 
-        if not read_csv_config and not usecols:
-            dataframe = pd.read_csv(csv_path)
-        elif not read_csv_config and usecols:
-            dataframe = pd.read_csv(csv_path, usecols=usecols)
-        elif usecols:
-            dataframe = pd.read_csv(csv_path, usecols=usecols, **read_csv_config)
-        else:
-            dataframe = pd.read_csv(csv_path, **read_csv_config)
+        dataframe = _load_file(
+            file_path=file_path,
+            method=_get_pandas_load_method(file_type),
+            read_file_config=read_file_config,
+            # usecols=usecols,
+        )
 
         return cls(
             file_loc=file_loc,
@@ -100,19 +106,38 @@ class DataFrameInput:
             dataframe=dataframe,
         )
 
+    def _generate_dataframe_summaries(self) -> None:
+        """
+        Generate the data summaries.
+        """
+        buffer = io.StringIO()
+        self.dataframe.info(buf=buffer)
 
-class DataFramePackage:
+        df_info = buffer.getvalue()
+        desc_numeric = self.dataframe.describe(
+            percentiles=[0.1, 0.25, 0.5, 0.75, 0.9, 0.95, 0.99]
+        )
+        desc_categorical = self.dataframe.describe(include="object")
+
+        self.df_info = df_info
+        self.numeric_data_description = desc_numeric
+        self.categorical_data_description = desc_categorical
+
+
+class DataFramePackageCollection:
     """
     A collection of DataFrameInput objects.
     """
 
-    data: List[DataFrameInput]
+    data: List[DataFramePackage]
 
     def __init__(self, data: Dict[str, pd.DataFrame]) -> None:
         self.data = data
 
     @classmethod
-    def from_csv_list(cls, csv_location_list: List[str]) -> Self:
+    def from_csv_list(
+        cls, csv_location_list: List[str]
+    ) -> "DataFramePackageCollection":
         """
         Construct a DataFrameInput object from a list of CSV file addresses.
 
@@ -138,10 +163,65 @@ class DataFramePackage:
         return cls(data=data)
 
 
-def _get_csv_columns(file_path: str, sep: str = ",") -> List[str]:
+def _get_columns(file_path: str, sep: str = ",") -> List[str]:
 
-    with open(file_path) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=sep)
+    if file_path.endswith(".csv"):
+        with open(file_path) as f:
+            csv_reader = csv.reader(f, delimiter=sep)
 
-        for row in csv_reader:
-            return row[1:]
+            for row in csv_reader:
+                return row[1:]
+    elif file_path.endswith(".json"):
+        with open(file_path) as f:
+            json_reader: Dict[str, List[Any]] = json.load(f)
+            return list(json_reader.keys())
+
+    else:
+        raise ValueError(f"Unable to parse file type from file path {file_path}")
+
+
+def _get_file_type(file_path: str) -> str:
+    if file_path.endswith(".csv"):
+        return "csv"
+    elif file_path.endswith(".json"):
+        return "json"
+    else:
+        raise ValueError(f"Unable to parse file type from file path {file_path}")
+
+
+def _load_file(
+    file_path: str,
+    method: Callable,
+    read_file_config: Optional[Dict[str, Any]],
+    # usecols: Optional[List[str]] = None,
+) -> pd.DataFrame:
+
+    assert method in [
+        pd.read_csv,
+        pd.read_json,
+    ], f"Unsupported pandas read_* method provided: {method}"
+
+    if not read_file_config:
+        return method(file_path)
+    # elif not read_file_config and usecols:
+    #     return method(file_path, usecols=usecols)
+    # elif usecols:
+    #     return method(file_path, usecols=usecols, **read_file_config)
+    else:
+        if method == pd.read_json:
+            # read_json doesn't have a usecols arg parameter
+            cols = read_file_config.pop("usecols")
+            return method(file_path, **read_file_config)[cols]
+        else:
+            return method(file_path, **read_file_config)
+
+
+def _get_pandas_load_method(file_type: str) -> Callable:
+    if file_type == "csv":
+        return pd.read_csv
+    elif file_type == "json":
+        return pd.read_json
+    else:
+        raise ValueError(
+            f"Unable to provide pandas read_* method for file type {file_type}"
+        )

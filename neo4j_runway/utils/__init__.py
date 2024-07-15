@@ -1,3 +1,3 @@
 from .naming_conventions import fix_node_label, fix_property, fix_relationship_type
 from .test_connection import test_database_connection
-from .dataframe_loader import DataFrameInput, DataFramePackage
+from .dataframe_loader import DataFramePackageCollection, DataFramePackage
