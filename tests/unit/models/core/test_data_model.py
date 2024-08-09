@@ -99,6 +99,7 @@ class TestDataModel(unittest.TestCase):
             )
         ]
 
+
     def test_bad_init(self) -> None:
         """
         Test bad input for init.
@@ -250,6 +251,147 @@ class TestDataModel(unittest.TestCase):
 
     def test_data_model_with_multi_csv_from_solutions_workbench(self) -> None:
         pass
+
+    def test_get_node(self) -> None:
+        """
+        Test get_node method.
+        """
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+
+        node = test_model.get_node("Person")
+        self.assertIsNotNone(node)
+        self.assertEqual(node.label, "Person")
+
+        node = test_model.get_node("NonExistingNode")
+        self.assertIsNone(node)
+
+    def test_get_relationship(self) -> None:
+        """
+        Test get_relationship method.
+        """
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+
+        relationship = test_model.get_relationship("HAS_ADDRESS")
+        self.assertIsNotNone(relationship)
+        self.assertEqual(relationship.type, "HAS_ADDRESS")
+
+        relationship = test_model.get_relationship("NON_EXISTING_REL")
+        self.assertIsNone(relationship)
+
+    def test_set_node(self) -> None:
+        """
+        Test set_node method.
+        """
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+
+        new_node_label = "NewNode"
+        new_node = test_model.set_node(new_node_label, csv_name="new_nodes.csv")
+        self.assertIsNotNone(new_node)
+        self.assertEqual(new_node.label, new_node_label)
+        self.assertIn(new_node, test_model.nodes)
+
+        updated_node = test_model.set_node("Person", csv_name="people.csv")
+        self.assertEqual(updated_node.csv_name, "people.csv")
+
+        with self.assertRaises(ValueError):
+            test_model.set_node("Person", invalid_attr="value")
+
+    def test_set_relationship(self) -> None:
+        """
+        Test set_relationship method.
+        """
+        # Ensure nodes are correctly initialized
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+        print("Nodes in test_model:", [node.label for node in test_model.nodes])
+
+        source_node_label = "Individual"
+        target_node_label = "Address"
+
+        assert test_model.get_node(source_node_label) is not None, "Source node does not exist"
+
+        # Adding a new relationship
+        new_relationship_type = "NEW_REL"
+        new_relationship = test_model.set_relationship(
+            new_relationship_type, source_node_label, target_node_label, csv_name="relationships.csv"
+        )
+        self.assertIsNotNone(new_relationship)
+        self.assertEqual(new_relationship.type, new_relationship_type)
+        self.assertEqual(new_relationship.source, source_node_label)
+        self.assertEqual(new_relationship.target, target_node_label)
+        self.assertIn(new_relationship, test_model.relationships)
+
+        # Updating an existing relationship
+        updated_relationship = test_model.set_relationship(
+            "HAS_ADDRESS", source_node_label, target_node_label, csv_name="addresses.csv"
+        )
+        self.assertEqual(updated_relationship.csv_name, "addresses.csv")
+
+        # Invalid attribute (should raise ValueError)
+        with self.assertRaises(ValueError):
+            test_model.set_relationship("FRIENDS_WITH", source_node_label, target_node_label, invalid_attr="value")
+
+        # Non-existing source node (should raise ValueError)
+        with self.assertRaises(ValueError):
+            test_model.set_relationship("NEW_REL", "NonExistingNode", target_node_label)
+
+        # Non-existing target node (should raise ValueError)
+        with self.assertRaises(ValueError):
+            test_model.set_relationship("NEW_REL", source_node_label, "NonExistingNode")
+
+    def test_mutate_node(self) -> None:
+        """
+        Test mutate_node method.
+        """
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+
+        current_label = "Person"
+        mutated_node = test_model.mutate_node(current_label, label="Individual")
+        self.assertEqual(mutated_node.label, "Individual")
+
+        self.assertIsNotNone(test_model.get_node("Individual"))
+        self.assertIsNone(test_model.get_node(current_label))
+
+        with self.assertRaises(ValueError):
+            test_model.mutate_node("NonExistingNode", label="NewLabel")
+
+        with self.assertRaises(ValueError):
+            test_model.mutate_node("Person", invalid_attr="value")
+
+    def test_mutate_relationship(self) -> None:
+        """
+        Test mutate_relationship method.
+        """
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+
+        current_type = "HAS_ADDRESS"
+        mutated_relationship = test_model.mutate_relationship(current_type, type="HAS_NEW_ADDRESS")
+        self.assertEqual(mutated_relationship.type, "HAS_NEW_ADDRESS")
+
+        self.assertIsNotNone(test_model.get_relationship("HAS_NEW_ADDRESS"))
+        self.assertIsNone(test_model.get_relationship(current_type))
+
+        with self.assertRaises(ValueError):
+            test_model.mutate_relationship("NON_EXISTING_REL", type="NEW_TYPE")
+
+        with self.assertRaises(ValueError):
+            test_model.mutate_relationship("FRIENDS_WITH", invalid_attr="value")
+
+    def test_add_node(self):
+        """
+        Test adding a new node to the data model.
+        """
+        test_model = DataModel(nodes=self.good_nodes, relationships=self.good_relationships)
+        print("Nodes in test_model:", [node.label for node in test_model.nodes])
+
+        pet_name = Property(name="name", type="str", csv_mapping="pet_name", is_unique=True)
+        pet_kind = Property(name="kind", type="str", csv_mapping="pet_kind", is_unique=False)
+        pet_node = Node(label="LEGEND", properties=[pet_name, pet_kind])
+
+        test_model.add_node(pet_node)
+        self.assertIn(pet_node, test_model.nodes)
+
+        with self.assertRaises(ValueError):
+            test_model.add_node(pet_node)
 
 
 if __name__ == "__main__":

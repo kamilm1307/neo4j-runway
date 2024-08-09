@@ -159,3 +159,24 @@ class Property(BaseModel):
             hasUniqueConstraint=self.is_unique,
             isArray=True if self.type.startswith("List") else False,
         )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Property):
+            return False
+        return (
+            self.name == other.name and
+            self.type == other.type
+        )
+
+    def __hash__(self) -> int:
+        return hash((
+            self.name,
+            self.type
+        ))
+
+    def __repr__(self) -> str:
+        return (
+            f"Property(name={self.name!r}, type={self.type!r}, "
+            f"csv_mapping={self.csv_mapping!r}, csv_mapping_other={self.csv_mapping_other!r}, "
+            f"is_unique={self.is_unique}, part_of_key={self.part_of_key})"
+        )
